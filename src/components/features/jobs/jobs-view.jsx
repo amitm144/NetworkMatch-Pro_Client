@@ -1,111 +1,119 @@
-// src/components/features/jobs/jobs-view.jsx
-import { useState, useEffect, useMemo } from 'react';
+// components/features/jobs/jobs-view.jsx
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { jobsApi } from '@/api';
-import { useToast } from "@/hooks/use-toast";
 import { JobFilters } from './components/job-filters';
 import { JobsList } from './components/jobs-list';
-import { queryKeys } from '@/lib/query-config';
+import { useFilters } from '@/hooks/use-filters';
+import { useErrorHandler } from '@/hooks/use-error-handler';
+import { LoadingState } from '@/components/ui/common/loading-state';
+import { EmptyState } from '@/components/ui/common/empty-state';
+
+// Utility function to filter jobs
+const filterJobs = (jobs, { searchTerm, location }) => {
+  return jobs.filter(job => {
+    const matchesSearch = !searchTerm || 
+      job.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      job.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      job.description?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+    const matchesLocation = location === 'all' || 
+      job.location?.toLowerCase() === location.toLowerCase();
+
+    return matchesSearch && matchesLocation;
+  });
+};
 
 export function JobsView() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [locationFilter, setLocationFilter] = useState('all');
-  const { toast } = useToast();
   const queryClient = useQueryClient();
+  const handleError = useErrorHandler();
+  const { 
+    searchTerm, 
+    setSearchTerm,
+    locationFilter, 
+    setLocationFilter
+  } = useFilters();
 
-  // Query for jobs with search filters
+  // Query for all jobs without filters
   const jobsQuery = useQuery({
-    queryKey: queryKeys.jobs.search({ searchTerm, location: locationFilter }),
-    queryFn: () => jobsApi.searchJobs({
-      q: searchTerm,
-      location: locationFilter !== 'all' ? locationFilter : undefined,
-    }),
-    select: (data) => data.data || [],
-    staleTime: 1000 * 60 * 5, // Consider data fresh for 5 minutes
+    queryKey: ['jobs'],
+    queryFn: () => jobsApi.searchJobs(),
+    select: (data) => data.jobs || [],
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
   });
 
   // Mutation for syncing jobs
   const syncMutation = useMutation({
     mutationFn: jobsApi.syncJobs,
     onSuccess: () => {
-      // Invalidate and refetch jobs query
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all });
-      toast({
-        title: "Success",
-        description: "Jobs have been synced successfully.",
-      });
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
     },
-    onError: (error) => {
-      toast({
-        variant: "destructive",
-        title: "Sync Failed",
-        description: error.message || "Failed to sync jobs.",
-      });
-    },
+    onError: (error) => handleError(error, {
+      title: "Sync Failed",
+      defaultMessage: "Failed to sync jobs"
+    })
   });
 
-  // Debounced search effect using TanStack Query's built-in debouncing
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
-  const debouncedLocationFilter = useDebounce(locationFilter, 300);
+  // Apply client-side filtering
+  const filteredJobs = jobsQuery.data 
+    ? filterJobs(jobsQuery.data, {
+        searchTerm,
+        location: locationFilter
+      })
+    : [];
 
-  // Refetch when debounced filters change
-  useEffect(() => {
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.jobs.search({
-        searchTerm: debouncedSearchTerm,
-        location: debouncedLocationFilter,
-      }),
-    });
-  }, [debouncedSearchTerm, debouncedLocationFilter, queryClient]);
-
-  const handleRefresh = () => {
-    syncMutation.mutate();
-  };
+  // Get unique locations for the filter dropdown
+  const locations = jobsQuery.data
+    ? [...new Set(jobsQuery.data.map(job => job.location).filter(Boolean))]
+    : [];
 
   return (
-    <div className="space-y-4">
-      <JobFilters 
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        locationFilter={locationFilter}
-        onLocationChange={setLocationFilter}
-        onRefresh={handleRefresh}
-        isLoading={jobsQuery.isLoading || syncMutation.isPending}
-      />
+    <div className="max-w-7xl mx-auto p-6 space-y-6">
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight">Available Jobs</h1>
+        <p className="text-muted-foreground text-lg">
+          Browse and filter available positions
+        </p>
+      </div>
 
-      {jobsQuery.isError && (
-        <div className="p-4 bg-destructive/10 text-destructive rounded-md">
-          Error loading jobs: {jobsQuery.error.message}
-        </div>
-      )}
+      <div className="space-y-6">
+        <JobFilters
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          locationFilter={locationFilter}
+          onLocationChange={setLocationFilter}
+          locations={locations}
+          onRefresh={() => syncMutation.mutate()}
+          isLoading={jobsQuery.isLoading || syncMutation.isPending}
+        />
 
-      <JobsList 
-        jobs={jobsQuery.data || []} 
-        isLoading={jobsQuery.isLoading || syncMutation.isPending}
-      />
+        {jobsQuery.isLoading ? (
+          <LoadingState message="Loading jobs..." />
+        ) : jobsQuery.isError ? (
+          <div className="p-4 bg-destructive/10 text-destructive rounded-md">
+            Error loading jobs: {jobsQuery.error.message}
+          </div>
+        ) : !filteredJobs.length ? (
+          <EmptyState
+            title="No Jobs Found"
+            description="No jobs match your current filters"
+          />
+        ) : (
+          <>
+            <JobsList
+              jobs={filteredJobs}
+              isLoading={false}
+            />
 
-      <div className="text-center text-sm text-muted-foreground">
-        {jobsQuery.isFetching && !jobsQuery.isLoading && (
-          <span>Refreshing results...</span>
+            <footer className="text-center text-sm text-muted-foreground">
+              <p>
+                Showing {filteredJobs.length} of {jobsQuery.data.length} jobs
+                {searchTerm && ` matching "${searchTerm}"`}
+                {locationFilter !== 'all' && ` in ${locationFilter}`}
+              </p>
+            </footer>
+          </>
         )}
       </div>
     </div>
   );
-}
-
-// Custom hook for debouncing values
-function useDebounce(value, delay) {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
 }

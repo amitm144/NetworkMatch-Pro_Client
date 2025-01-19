@@ -10,7 +10,7 @@ const handleResponse = async (response) => {
   return response.json();
 };
 
-// Common fetch configuration
+// Fetch configuration
 const createFetchConfig = (method = 'GET', body = null) => {
   const config = {
     method,
@@ -67,9 +67,6 @@ export const jobsApi = {
 // LinkedIn API
 export const linkedinApi = {
   uploadConnections: async (file) => {
-    // const formData = new FormData();
-    // formData.append('file', file);
-
     const response = await fetch(
       `${API_BASE_URL}/api/linkedin/sync`,
       createFetchConfig('POST', file)
@@ -97,7 +94,7 @@ export const matchingApi = {
   }
 };
 
-// Storage utilities for Chrome extension
+// Storage utilities
 export const storageApi = {
   getSessionId: async () => {
     try {

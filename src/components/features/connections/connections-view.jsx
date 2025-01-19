@@ -1,51 +1,42 @@
-// src/components/features/connections/connections-view.jsx
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { linkedinApi, storageApi } from '@/api';
-import { useToast } from "@/hooks/use-toast";
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { linkedinApi } from '@/api';
+import { Button } from "@/components/ui/button";
+import { Upload } from 'lucide-react';
 import { ConnectionsList } from './components/connections-list';
 import { ConnectionFilters } from './components/connection-filters';
 import { ConnectionStats } from './components/connection-stats';
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Upload, AlertCircle } from 'lucide-react';
 import { filterConnections, getUniqueCompanies } from '@/lib/connection-utils';
 import { queryKeys } from '@/lib/query-config';
+import { useSession } from '@/hooks/use-session';
+import { useErrorHandler } from '@/hooks/use-error-handler';
+import { useFilters } from '@/hooks/use-filters';
+import { LoadingState } from '@/components/ui/common/loading-state';
+import { EmptyState } from '@/components/ui/common/empty-state';
 
 export function ConnectionsView() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [companyFilter, setCompanyFilter] = useState('all');
-  const { toast } = useToast();
   const queryClient = useQueryClient();
+  const handleError = useErrorHandler();
+  const { session, isLoading: sessionLoading } = useSession();
+  const {
+    searchTerm,
+    setSearchTerm,
+    companyFilter,
+    setCompanyFilter
+  } = useFilters();
 
-  // Query for session ID
-  const sessionQuery = useQuery({
-    queryKey: ['session'],
-    queryFn: storageApi.getSessionId,
-    retry: false,
-    staleTime: Infinity // Session ID doesn't change often
-  });
-
-  // Query for connections data - only runs when we have a session
+  // Query for connections data
   const connectionsQuery = useQuery({
-    queryKey: queryKeys.connections.bySession(sessionQuery.data),
-    queryFn: async () => {
-      try {
-        const response = await linkedinApi.getConnections(sessionQuery.data);
-        return response;
-      } catch (error) {
-        // If no connections found, clear session
-        if (error.message?.includes('No connections found')) {
-          await storageApi.clearSession();
-          queryClient.setQueryData(['session'], null);
-        }
-        throw error;
-      }
-    },
-    enabled: !!sessionQuery.data, // Only fetch if we have a session ID
+    queryKey: queryKeys.connections.bySession(session),
+    queryFn: () => linkedinApi.getConnections(session),
+    enabled: !!session,
     select: (data) => data.connections,
-    staleTime: 1000 * 60 * 5, // Consider data fresh for 5 minutes
-    retry: false // Don't retry on error
+    staleTime: 1000 * 60 * 5,
+    retry: false,
+    onError: (error) => handleError(error, {
+      title: "Connection Error",
+      defaultMessage: "Failed to load connections",
+      clearSession: error.message?.includes('No connections found')
+    })
   });
 
   // Mutation for uploading connections
@@ -53,128 +44,95 @@ export function ConnectionsView() {
     mutationFn: async (file) => {
       const formData = new FormData();
       formData.append('file', file);
-      const { sessionId } = await linkedinApi.uploadConnections(formData);
-      await storageApi.setSessionId(sessionId);
-      return sessionId;
+      return linkedinApi.uploadConnections(formData);
     },
-    onSuccess: (sessionId) => {
-      queryClient.setQueryData(['session'], sessionId);
+    onSuccess: (data) => {
+      queryClient.setQueryData(['session'], data.sessionId);
       queryClient.invalidateQueries({ queryKey: queryKeys.connections.all });
-      toast({
-        title: "Success",
-        description: "LinkedIn connections synced successfully.",
-      });
     },
-    onError: async (error) => {
-      toast({
-        variant: "destructive",
-        title: "Sync Failed",
-        description: error.message || "Failed to sync LinkedIn connections.",
-      });
-      await storageApi.clearSession();
-      queryClient.setQueryData(['session'], null);
-    },
+    onError: (error) => handleError(error, {
+      title: "Upload Failed",
+      defaultMessage: "Failed to upload connections",
+      clearSession: true
+    })
   });
-
-  // Filter connections using the utility function
-  const filteredConnections = filterConnections(connectionsQuery.data || [], {
-    searchTerm,
-    company: companyFilter
-  });
-
-  // Get unique companies for the filter dropdown
-  const companies = getUniqueCompanies(connectionsQuery.data || []);
 
   const handleFileUpload = (file) => {
     uploadMutation.mutate(file);
   };
 
-  // Show upload prompt if no connections
-  if (!sessionQuery.data) {
+  // Derived values
+  const filteredConnections = connectionsQuery.data 
+    ? filterConnections(connectionsQuery.data, {
+        searchTerm,
+        company: companyFilter
+      }) 
+    : [];
+
+  const companies = getUniqueCompanies(connectionsQuery.data || []);
+
+  // UI Components
+  const UploadButton = (
+    <Button
+      size="lg"
+      onClick={() => document.getElementById('file-upload').click()}
+      disabled={uploadMutation.isPending}
+      className="flex items-center gap-2 w-full bg-blue-600"
+    >
+      <Upload className="h-5 w-5" />
+      {uploadMutation.isPending ? "Syncing..." : "Upload LinkedIn CSV"}
+    </Button>
+  );
+
+  const Header = (
+    <div className="flex flex-col space-y-4 justify-between items-start">
+
+      {UploadButton}
+      <input
+        id="file-upload"
+        type="file"
+        accept=".csv"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) {
+            handleFileUpload(file);
+            e.target.value = '';
+          }
+        }}
+      />
+        <h1 className="text-3xl font-bold tracking-tight">LinkedIn Network</h1>
+        <p className="text-muted-foreground text-lg">
+          Manage and analyze your professional connections
+        </p>
+    </div>
+  );
+
+  // Loading and error states
+  if (sessionLoading || connectionsQuery.isLoading) {
     return (
       <div className="max-w-7xl mx-auto p-6 space-y-6">
-        <div className="flex justify-between items-start">
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight">LinkedIn Network</h1>
-            <p className="text-muted-foreground text-lg">
-              Manage and analyze your professional connections
-            </p>
-          </div>
-          
-          <Button
-            size="lg"
-            onClick={() => document.getElementById('file-upload').click()}
-            disabled={uploadMutation.isPending}
-            className="flex items-center gap-2"
-          >
-            <Upload className="h-5 w-5" />
-            {uploadMutation.isPending ? "Syncing..." : "Upload LinkedIn CSV"}
-          </Button>
-          <input
-            id="file-upload"
-            type="file"
-            accept=".csv"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                handleFileUpload(file);
-                e.target.value = '';
-              }
-            }}
-          />
-        </div>
+        {Header}
+        <LoadingState message="Loading connections..." />
+      </div>
+    );
+  }
 
-        <Card>
-          <CardContent className="h-96 flex items-center justify-center">
-            <div className="text-center space-y-4">
-              <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto" />
-              <div className="space-y-2">
-                <p className="text-xl text-muted-foreground">No Connections Found</p>
-                <p className="text-sm text-muted-foreground">
-                  Upload your LinkedIn connections CSV to get started
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+  if (!session) {
+    return (
+      <div className="max-w-7xl mx-auto p-6 space-y-6">
+        {Header}
+        <EmptyState
+          title="No Connections CSV Found"
+          description="Upload your LinkedIn connections CSV to get started"
+        />
       </div>
     );
   }
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-start">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">LinkedIn Network</h1>
-          <p className="text-muted-foreground text-lg">
-            Manage and analyze your professional connections
-          </p>
-        </div>
-        
-        <Button
-          size="lg"
-          onClick={() => document.getElementById('file-upload').click()}
-          disabled={uploadMutation.isPending}
-          className="flex items-center gap-2"
-        >
-          <Upload className="h-5 w-5" />
-          {uploadMutation.isPending ? "Syncing..." : "Upload LinkedIn CSV"}
-        </Button>
-        <input
-          id="file-upload"
-          type="file"
-          accept=".csv"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) {
-              handleFileUpload(file);
-              e.target.value = '';
-            }
-          }}
-        />
-      </div>
+      {Header}
 
       <ConnectionStats connections={connectionsQuery.data || []} />
 

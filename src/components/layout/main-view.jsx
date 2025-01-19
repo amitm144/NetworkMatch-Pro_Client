@@ -1,6 +1,5 @@
 // src/components/layout/main-view.jsx
 import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { X } from 'lucide-react';
@@ -8,26 +7,19 @@ import { useData } from "@/lib/data-context";
 import { ConnectionsView } from "@/components/features/connections/connections-view";
 import { JobsView } from "@/components/features/jobs/jobs-view";
 import { MatchingView } from "@/components/features/matching/matching-view";
-import { storageApi } from "@/api";
+import { useSession } from "@/hooks/use-session";
 
 export function MainView() {
-  const { fetchJobs, fetchMatches, clearSession } = useData();
-
-  // Use TanStack Query for session state
-  const sessionQuery = useQuery({
-    queryKey: ['session'],
-    queryFn: storageApi.getSessionId,
-    retry: false,
-    staleTime: Infinity
-  });
+  const { fetchJobs, fetchMatches } = useData();
+  const { session, clearSession, isLoading } = useSession();
 
   useEffect(() => {
-    // Initial data fetch
-    fetchJobs().catch(console.error);
-    if (sessionQuery.data) {
+    // Only fetch data if we have a session
+    if (session) {
+      fetchJobs().catch(console.error);
       fetchMatches().catch(console.error);
     }
-  }, [sessionQuery.data, fetchJobs, fetchMatches]);
+  }, [session, fetchJobs, fetchMatches]);
 
   const handleClose = () => {
     window.close();
@@ -61,13 +53,14 @@ export function MainView() {
         </div>
       </Tabs>
 
-      {sessionQuery.data && (
+      {session && (
         <div className="p-4 border-t">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => clearSession()}
+            onClick={clearSession}
             className="w-full"
+            disabled={isLoading}
           >
             Clear Session
           </Button>

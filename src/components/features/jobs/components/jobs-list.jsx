@@ -1,8 +1,25 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { JobCard } from './job-card';
-import { Loader2, SearchX } from 'lucide-react';
 
-export function JobsList({ jobs, isLoading }) {
+import { Loader2, SearchX } from 'lucide-react';
+import { usePagination } from '@/hooks/use-pagination';
+import { PaginationControl } from "@/components/ui/common/pagination-control";
+
+export function JobsList({ 
+  jobs = [], 
+  isLoading,
+  itemsPerPage = 10
+}) {
+  const {
+    currentPage,
+    totalPages,
+    handlePageChange,
+    slicePage
+  } = usePagination({
+    totalItems: jobs.length,
+    itemsPerPage
+  });
+
   if (isLoading) {
     return (
       <Card className="min-h-96">
@@ -30,11 +47,27 @@ export function JobsList({ jobs, isLoading }) {
     );
   }
 
+  const paginatedJobs = slicePage(jobs);
+
   return (
-    <div className="space-y-6">
-      {jobs.map((job) => (
-        <JobCard key={job._id} job={job} />
-      ))}
+    <div className="space-y-8">
+      {/* Jobs Grid */}
+      <div className="space-y-6">
+        {paginatedJobs.map((job) => (
+          <JobCard key={job._id} job={job} />
+        ))}
+      </div>
+
+      {/* Centered Pagination */}
+      <div className="flex justify-center py-8 border-t">
+        <PaginationControl
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+          itemsPerPage={itemsPerPage}
+          totalItems={jobs.length}
+        />
+      </div>
     </div>
   );
 }

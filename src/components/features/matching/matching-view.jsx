@@ -1,33 +1,28 @@
-// src/components/features/matching/matching-view.jsx
-import { useState, useMemo } from 'react';
+// components/features/matching/matching-view.jsx
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { matchingApi, storageApi } from '@/api';
-import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, UserX, AlertCircle } from 'lucide-react';
+import { matchingApi } from '@/api';
 import { MatchCard } from './components/match-card';
 import { MatchStats } from './components/match-stats';
 import { MatchFilters } from './components/match-filters';
 import { queryKeys } from '@/lib/query-config';
+import { useSession } from '@/hooks/use-session';
+import { useErrorHandler } from '@/hooks/use-error-handler';
+import { useFilters } from '@/hooks/use-filters';
+import { LoadingState } from '@/components/ui/common/loading-state';
+import { EmptyState } from '@/components/ui/common/empty-state';
+import { Upload } from 'lucide-react';
 
 export function MatchingView() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [companyFilter, setCompanyFilter] = useState('all');
-  const { toast } = useToast();
-
-  // Query for session ID
-  const sessionQuery = useQuery({
-    queryKey: ['session'],
-    queryFn: storageApi.getSessionId,
-    retry: false,
-  });
+  const handleError = useErrorHandler();
+  const { session, isLoading: sessionLoading } = useSession();
+  const { searchTerm, setSearchTerm, companyFilter, setCompanyFilter } = useFilters();
 
   // Query for matches using session ID
   const matchesQuery = useQuery({
-    queryKey: queryKeys.matches.bySession(sessionQuery.data),
-    queryFn: () => matchingApi.getMatches(sessionQuery.data),
-    enabled: !!sessionQuery.data,
+    queryKey: queryKeys.matches.bySession(session),
+    queryFn: () => matchingApi.getMatches(session),
+    enabled: !!session,
     select: (response) => {
       if (response?.matches && Array.isArray(response.matches)) {
         return response.matches.filter(match => 
@@ -38,27 +33,138 @@ export function MatchingView() {
       }
       return [];
     },
-    retry: false, // Don't retry on error
+    retry: false,
+    onError: (error) => handleError(error, {
+      title: "Matching Error",
+      defaultMessage: "Failed to load matches",
+      clearSession: error.message?.includes('No connections found')
+    })
   });
 
   // Filter matches based on search term and company filter
+
+
+
+
+  //FIRST TRY , WORKS BUT NOT THE BEST
+  // const filteredMatches = useMemo(() => {
+  //   const matches = matchesQuery.data || [];
+  
+  //   return matches
+  //     .map(match => {
+  //       if (!match?.jobs?.length && !match?.connections?.length) return null;
+  
+  //       // Filter jobs based on the search term
+  //       const filteredJobs = match.jobs.filter(job =>
+  //         !searchTerm || job.title?.toLowerCase().includes(searchTerm.toLowerCase())
+  //       );
+  
+  //       // Determine if the match should be included based on jobs and company filter
+  //       const matchesCompany = !companyFilter ||
+  //         companyFilter === 'all' ||
+  //         match.company?.toLowerCase() === companyFilter.toLowerCase();
+  
+  //       // Only include matches with relevant jobs or matching company
+  //       if ((filteredJobs.length > 0 || matchesCompany) && matchesCompany) {
+  //         return {
+  //           ...match,
+  //           jobs: filteredJobs, // Only filtered jobs
+  //           connections: match.connections, // Include all connections
+  //         };
+  //       }
+  
+  //       return null;
+  //     })
+  //     .filter(Boolean); // Remove null entries
+  // }, [matchesQuery.data, searchTerm, companyFilter]);
+  
+
+  //SECOND TRY , WORKS PERFECTLY BUT WITHOUT EMPTY STATE
+  // const filteredMatches = useMemo(() => {
+  //   const matches = matchesQuery.data || [];
+  
+  //   return matches
+  //     .map(match => {
+  //       if (!match?.jobs?.length && !match?.connections?.length) return null;
+  
+  //       // Filter jobs by search term
+  //       const filteredJobs = match.jobs.filter(job =>
+  //         searchTerm && job.title?.toLowerCase().includes(searchTerm.toLowerCase())
+  //       );
+  
+  //       // Filter connections by search term
+  //       const filteredConnections = match.connections.filter(connection =>
+  //         searchTerm &&
+  //         (connection.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  //          connection.position?.toLowerCase().includes(searchTerm.toLowerCase()))
+  //       );
+  
+  //       // Define inclusion rules based on the search context
+  //       const isJobSearch = filteredJobs.length > 0; // Matches job titles
+  //       const isConnectionSearch = filteredConnections.length > 0; // Matches connection names/positions
+  
+  //       // Handle cases based on what is matched
+  //       if (isJobSearch || isConnectionSearch) {
+  //         return {
+  //           ...match,
+  //           jobs: isConnectionSearch ? match.jobs : filteredJobs, // Show all jobs for connection search, or filtered jobs for job search
+  //           connections: isJobSearch ? match.connections : filteredConnections, // Show all connections for job search, or filtered connections for connection search
+  //         };
+  //       }
+  
+  //       return null; // Exclude companies with no matches
+  //     })
+  //     .filter(Boolean); // Remove null entries
+  // }, [matchesQuery.data, searchTerm, companyFilter]);
+
+  //THIRD TRY , WORKS PERFECTLY WITH EMPTY STATE
   const filteredMatches = useMemo(() => {
     const matches = matchesQuery.data || [];
-    return matches.filter(match => {
-      if (!match?.jobs) return false;
-
-      const matchesSearch = !searchTerm || 
-        match.job.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        match.job.company?.toLowerCase().includes(searchTerm.toLowerCase());
-
-      const matchesCompany = !companyFilter || 
-        companyFilter === 'all' || 
-        match.job.company === companyFilter;
-
-      return matchesSearch && matchesCompany;
-    });
+  
+    return matches
+      .map(match => {
+        if (!match?.jobs?.length && !match?.connections?.length) return null;
+  
+        // If the search term is empty, return all jobs and connections
+        if (!searchTerm) {
+          // Still respect company filter
+          const matchesCompany = !companyFilter ||
+            companyFilter === 'all' ||
+            match.company?.toLowerCase() === companyFilter.toLowerCase();
+  
+          return matchesCompany ? match : null;
+        }
+  
+        // Filter jobs by search term
+        const filteredJobs = match.jobs.filter(job =>
+          job.title?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+  
+        // Filter connections by search term
+        const filteredConnections = match.connections.filter(connection =>
+          connection.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          connection.position?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+  
+        // Define inclusion rules based on the search term context
+        const isJobSearch = filteredJobs.length > 0; // Matches job titles
+        const isConnectionSearch = filteredConnections.length > 0; // Matches connection names/positions
+  
+        // Handle cases based on what is matched
+        if (isJobSearch || isConnectionSearch) {
+          return {
+            ...match,
+            jobs: isConnectionSearch ? match.jobs : filteredJobs, // Show all jobs for connection search, or filtered jobs for job search
+            connections: isJobSearch ? match.connections : filteredConnections, // Show all connections for job search, or filtered connections for connection search
+          };
+        }
+  
+        return null; // Exclude companies with no matches
+      })
+      .filter(Boolean); // Remove null entries
   }, [matchesQuery.data, searchTerm, companyFilter]);
-
+  
+  
   // Get unique companies from matches
   const companies = useMemo(() => {
     const matches = matchesQuery.data || [];
@@ -69,69 +175,26 @@ export function MatchingView() {
     )];
   }, [matchesQuery.data]);
 
-  if (!sessionQuery.data) {
+  if (sessionLoading || matchesQuery.isLoading) {
+    return <LoadingState message="Finding matches..." />;
+  }
+
+  if (!session) {
     return (
-      <Card>
-        <CardContent className="h-96 flex items-center justify-center">
-          <div className="text-center space-y-4">
-            <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto" />
-            <div className="space-y-2">
-              <p className="text-xl text-muted-foreground">No Active Session</p>
-              <p className="text-sm text-muted-foreground">
-                Please upload your LinkedIn connections CSV to get started
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <EmptyState
+        title="No Active Session"
+        description="Please upload your LinkedIn connections CSV to get started"
+        icon={Upload}
+      />
     );
   }
 
-  if (matchesQuery.isLoading) {
-    return (
-      <Card className="min-h-96">
-        <CardContent className="h-full flex items-center justify-center p-6">
-          <div className="text-center space-y-4">
-            <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
-            <p className="text-xl text-muted-foreground">Finding matches...</p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Show upload prompt if there's no data
   if (!matchesQuery.data?.length) {
     return (
-      <Card>
-        <CardContent className="h-96 flex items-center justify-center">
-          <div className="text-center space-y-4">
-            <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto" />
-            <div className="space-y-2">
-              <p className="text-xl text-muted-foreground">No Matches Available</p>
-              <p className="text-sm text-muted-foreground">
-                Please upload your LinkedIn connections CSV to see potential matches
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Handle actual errors (not the "no connections" state)
-  if (matchesQuery.isError && !matchesQuery.error.message?.includes('No connections found')) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              {matchesQuery.error.message || "Failed to load matches"}
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
+      <EmptyState
+        title="No Matches Available"
+        description="Upload your LinkedIn connections CSV to see potential matches"
+      />
     );
   }
 
@@ -144,52 +207,34 @@ export function MatchingView() {
         </p>
       </div>
 
-      {matchesQuery.data?.length > 0 ? (
-        <>
-          <MatchStats matches={matchesQuery.data} />
-          
-          <div className="grid gap-6">
-            <MatchFilters
-              searchTerm={searchTerm}
-              onSearchChange={setSearchTerm}
-              companyFilter={companyFilter}
-              onCompanyChange={setCompanyFilter}
-              companies={companies}
+      <MatchStats matches={matchesQuery.data} />
+      
+      <div className="grid gap-6">
+        <MatchFilters
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          companyFilter={companyFilter}
+          onCompanyChange={setCompanyFilter}
+          companies={companies}
+        />
+
+        <div className="space-y-6">
+          {filteredMatches.map((match) => (
+            <MatchCard 
+              key={match.jobs.id || Math.random()} 
+              match={match} 
             />
+          ))}
+        </div>
+      </div>
 
-            <div className="space-y-6">
-              {filteredMatches.map((match) => (
-                <MatchCard 
-                  key={match.jobs.id || Math.random()} 
-                  match={match} 
-                />
-              ))}
-            </div>
-          </div>
-
-          <footer className="mt-12 text-center text-sm text-muted-foreground">
-            <p>
-              Showing {filteredMatches.length} of {matchesQuery.data.length} matches
-              {searchTerm && ` matching "${searchTerm}"`}
-              {companyFilter !== 'all' && ` at ${companyFilter}`}
-            </p>
-          </footer>
-        </>
-      ) : (
-        <Card>
-          <CardContent className="h-96 flex items-center justify-center">
-            <div className="text-center space-y-4">
-              <UserX className="h-12 w-12 text-muted-foreground mx-auto" />
-              <div className="space-y-2">
-                <p className="text-xl text-muted-foreground">No matches found</p>
-                <p className="text-sm text-muted-foreground">
-                  Try adjusting your search filters or uploading more connections
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <footer className="mt-12 text-center text-sm text-muted-foreground">
+        <p>
+          Showing {filteredMatches.length} of {matchesQuery.data.length} matches
+          {searchTerm && ` matching "${searchTerm}"`}
+          {companyFilter !== 'all' && ` at ${companyFilter}`}
+        </p>
+      </footer>
     </div>
   );
 }
