@@ -182,8 +182,7 @@ export function MatchingView() {
   if (!session) {
     return (
       <EmptyState
-        title="No Active Session"
-        description="Please upload your LinkedIn connections CSV to get started"
+        description="First upload your LinkedIn connections CSV into the 'Connection' tab to get started"
         icon={Upload}
       />
     );

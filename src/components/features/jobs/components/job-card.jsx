@@ -1,17 +1,15 @@
 import { Briefcase, Building2, MapPin, Calendar, ExternalLink } from 'lucide-react';
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-
-import { JobMeta } from './job-meta';
 import { JobSkills } from './job-skills';
 import { CompanyLogo } from './company-logo';
+import { AnimatedButton } from '@/components/ui/animated-button';
 
 export function JobCard({ job }) {
   return (
     <Card className="border border-muted rounded-lg shadow-sm hover:shadow-lg transition-all duration-300">
       <div className="flex flex-col md:flex-row gap-4 p-6">
         {/* Logo Section */}
-        <div className="flex-shrink-0 flex items-center justify-center md:w-40 md:h-40 w-full h-16  rounded-lg md:self-center">
+        <div className="flex-shrink-0 flex items-center justify-center md:w-40 md:h-40 w-full h-16   rounded-lg md:self-center">
           <CompanyLogo url={job.logoUrl} companyName={job.company} />
         </div>
 
@@ -50,8 +48,8 @@ export function JobCard({ job }) {
         </div>
 
         {/* Apply Button */}
-        <div className="self-center w-full md:w-auto  mt-8 md:mt-0 ">
-          <Button
+        <div className="self-center w-fit md:w-auto  mt-8 md:mt-0 ">
+          {/* <Button
             size="lg"
             className="w-full md:w-auto bg-primary text-white hover:bg-primary-dark transition-transform transform hover:scale-105"
             onClick={() => window.open(job.applyUrl, '_blank')}
@@ -59,11 +57,18 @@ export function JobCard({ job }) {
           >
             Apply Now
             <ExternalLink className="h-4 w-4" />
-          </Button>
+          </Button> */}
+          <AnimatedButton
+                url={job.applyUrl}
+                text={`Apply`}
+                icon="✍🏼"
+              >
+                View Profile
+              </AnimatedButton>
+
+
         </div>
       </div>
-
-      {/* Mobile-Friendly Sticky Footer for Apply Button */}
 
     </Card>
   );

@@ -1,138 +1,105 @@
-import React, { useRef, useState } from "react";
-import { motion } from "framer-motion";
-import { IconUpload } from "@tabler/icons-react";
+import React, { useState } from "react";
+import { Upload, File, X } from "lucide-react";
 import { useDropzone } from "react-dropzone";
 
-// Utility function to conditionally join class names
-const cn = (...classes) => classes.filter(Boolean).join(" ");
+export function FileUpload({ onChange, accept = ".csv" }) {
+  const [file, setFile] = useState(null);
 
-const mainVariant = {
-  initial: { x: 0, y: 0 },
-  animate: { x: 20, y: -20, opacity: 0.9 },
-};
-
-const secondaryVariant = {
-  initial: { opacity: 0 },
-  animate: { opacity: 1 },
-};
-
-export const FileUpload = ({ onChange }) => {
-  const [files, setFiles] = useState([]);
-  const fileInputRef = useRef(null);
-
-  const handleFileChange = (newFiles) => {
-    setFiles((prev) => [...prev, ...newFiles]);
-    if (onChange) onChange(newFiles);
+  const onDrop = (acceptedFiles) => {
+    const selectedFile = acceptedFiles[0];
+    setFile(selectedFile);
+    if (onChange) onChange(acceptedFiles);
   };
 
-  const handleClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const { getRootProps, isDragActive } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      "text/csv": [".csv"],
+    },
     multiple: false,
-    noClick: true,
-    onDrop: handleFileChange,
-    onDropRejected: (error) => console.error(error),
   });
 
+  const removeFile = (e) => {
+    e.stopPropagation();
+    setFile(null);
+  };
+
   return (
-    <div className="w-full" {...getRootProps()}>
-      <motion.div
-        onClick={handleClick}
-        whileHover="animate"
-        className="p-10 group/file block rounded-lg cursor-pointer w-full relative overflow-hidden"
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          onChange={(e) => handleFileChange(Array.from(e.target.files || []))}
-          className="hidden"
-        />
-        <div className="absolute inset-0 [mask-image:radial-gradient(ellipse_at_center,white,transparent)]">
-          <GridPattern />
-        </div>
-        <div className="flex flex-col items-center justify-center">
-          <p className="relative z-20 font-sans font-bold text-neutral-700 dark:text-neutral-300">
-            Upload file
-          </p>
-          <p className="relative z-20 font-sans text-neutral-400 dark:text-neutral-400 mt-2">
-            Drag or drop your files here or click to upload
-          </p>
-          <div className="relative w-full mt-10 max-w-xl mx-auto">
-            {files.length > 0 ? (
-              files.map((file, idx) => (
-                <motion.div
-                  key={idx}
-                  layoutId={`file-upload-${idx}`}
-                  className={cn(
-                    "relative bg-white dark:bg-neutral-900 flex flex-col p-4 mt-4 rounded-md",
-                    "shadow-sm"
-                  )}
-                >
-                  <div className="flex justify-between w-full items-center gap-4">
-                    <motion.p className="text-base text-neutral-700 dark:text-neutral-300 truncate">
-                      {file.name}
-                    </motion.p>
-                    <motion.p className="rounded-lg px-2 py-1 text-sm text-neutral-600 dark:bg-neutral-800">
-                      {(file.size / (1024 * 1024)).toFixed(2)} MB
-                    </motion.p>
-                  </div>
-                  <div className="flex text-sm justify-between mt-2 text-neutral-600 dark:text-neutral-400">
-                    <motion.p className="px-1 py-0.5 rounded-md bg-gray-100 dark:bg-neutral-800">
-                      {file.type}
-                    </motion.p>
-                    <motion.p>
-                      Modified {new Date(file.lastModified).toLocaleDateString()}
-                    </motion.p>
-                  </div>
-                </motion.div>
-              ))
-            ) : (
-              <motion.div
-                layoutId="file-upload"
-                variants={mainVariant}
-                transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                className={cn(
-                  "relative bg-white dark:bg-neutral-900 flex items-center justify-center h-32 mt-4 w-full max-w-[8rem] mx-auto rounded-md",
-                  "shadow-[0px_10px_50px_rgba(0,0,0,0.1)]"
-                )}
-              >
-                {isDragActive ? (
-                  <motion.p className="text-neutral-600 flex flex-col items-center">
-                    Drop it
-                    <IconUpload className="h-4 w-4" />
-                  </motion.p>
-                ) : (
-                  <IconUpload className="h-4 w-4" />
-                )}
-              </motion.div>
-            )}
+    <div
+      {...getRootProps()}
+      className={`
+        relative
+        w-full 
+        rounded-lg 
+        border-2 
+        border-dashed 
+        transition-all 
+        duration-200
+        min-h-[200px]
+        flex 
+        items-center 
+        justify-center
+        cursor-pointer
+        group
+        ${
+          isDragActive
+            ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
+            : "border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600"
+        }
+      `}
+    >
+      <input {...getInputProps()} />
+
+      {file ? (
+        <div className="p-6 flex items-center gap-4 relative">
+          <File className="h-8 w-8 text-blue-500" />
+          <div>
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
+              {file.name}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {(file.size / 1024 / 1024).toFixed(2)} MB
+            </p>
           </div>
+          <button
+            onClick={removeFile}
+            className="absolute -top-2 -right-2 p-1 rounded-full bg-red-100 dark:bg-red-900 hover:bg-red-200 dark:hover:bg-red-800"
+          >
+            <X className="h-4 w-4 text-red-500 dark:text-red-400" />
+          </button>
         </div>
-      </motion.div>
-    </div>
-  );
-};
-
-export const GridPattern = () => {
-  const columns = 41;
-  const rows = 11;
-
-  return (
-    <div className="flex flex-wrap gap-x-px gap-y-px bg-gray-100 dark:bg-neutral-900">
-      {Array.from({ length: rows }).flatMap((_, row) =>
-        Array.from({ length: columns }).map((_, col) => (
-          <div
-            key={`${col}-${row}`}
-            className={`w-10 h-10 rounded-[2px] ${
-              (row * columns + col) % 2 === 0
-                ? "bg-gray-50 dark:bg-neutral-950"
-                : "bg-gray-50 dark:bg-neutral-950 shadow-inner"
-            }`}
-          />
-        ))
+      ) : (
+        <div className="space-y-4 text-center p-6">
+          <h1 className="text-2xl text-gray-900 font font-bold dark:text-gray-500">
+            Upload Your Connection CSV</h1>
+          <div>
+            <p className="text-lg font-medium text-gray-700 dark:text-gray-200">
+              {isDragActive
+                ? "Drop your file here"
+                : "Drag & drop your file here"}
+            </p>
+            <p className="text-md text-gray-500 dark:text-gray-400 mt-1">
+              or click to browse
+            </p>
+          </div>
+          <div className="mx-auto h-12 w-12 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
+            <Upload
+              className={`
+              h-6 
+              w-6 
+              ${
+                isDragActive
+                  ? "text-blue-500 dark:text-blue-400"
+                  : "text-gray-400 dark:text-gray-500"
+              }
+            `}
+            />
+          </div>
+          <p className="text-md text-gray-400 dark:text-gray-500">
+            Only CSV files are supported
+          </p>
+        </div>
       )}
     </div>
   );
-};
+}
