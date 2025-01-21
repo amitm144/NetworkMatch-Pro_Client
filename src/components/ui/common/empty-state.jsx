@@ -10,6 +10,7 @@ export function EmptyState({
   action
 }) {
   return (
+    <div className="max-w-7xl mx-auto p-6 space-y-6">
     <Card>
       <CardContent className={`flex items-center justify-center ${className}`}>
         <div className="text-center space-y-4">
@@ -26,5 +27,8 @@ export function EmptyState({
         </div>
       </CardContent>
     </Card>
+
+    </div>
+
   );
 }

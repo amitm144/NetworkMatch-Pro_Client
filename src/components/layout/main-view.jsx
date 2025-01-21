@@ -1,6 +1,5 @@
 // src/components/layout/main-view.jsx
 import { useEffect } from "react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { X } from 'lucide-react';
 import { useData } from "@/lib/data-context";
@@ -8,13 +7,14 @@ import { ConnectionsView } from "@/components/features/connections/connections-v
 import { JobsView } from "@/components/features/jobs/jobs-view";
 import { MatchingView } from "@/components/features/matching/matching-view";
 import { useSession } from "@/hooks/use-session";
+import { AnimatedTabs } from "../ui/tabs-animated";
+
 
 export function MainView() {
   const { fetchJobs, fetchMatches } = useData();
   const { session, clearSession, isLoading } = useSession();
 
   useEffect(() => {
-    // Only fetch data if we have a session
     if (session) {
       fetchJobs().catch(console.error);
       fetchMatches().catch(console.error);
@@ -25,41 +25,71 @@ export function MainView() {
     window.close();
   };
 
+  const tabs = [
+    {
+      title: "Matching",
+      value: "matching",
+      content: (
+        <div className="w-full max-w-4xl mx-auto h-full overflow-y-hi rounded-2xl p-8 bg-white dark:bg-zinc-900 shadow-xl border border-gray-200 dark:border-zinc-800">
+          <MatchingView />
+        </div>
+      ),
+    },
+    {
+      title: "Connections",
+      value: "connections",
+      content: (
+        <div className="w-full max-w-4xl mx-auto h-full overflow-auto rounded-2xl p-8 bg-white dark:bg-zinc-900 shadow-xl border border-gray-200 dark:border-zinc-800">
+          <ConnectionsView />
+        </div>
+      ),
+    },
+    {
+      title: "Jobs",
+      value: "jobs",
+      content: (
+        <div className="w-full max-w-4xl mx-auto h-full overflow-auto rounded-2xl p-8 bg-white dark:bg-zinc-900 shadow-xl border border-gray-200 dark:border-zinc-800">
+          <JobsView />
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <div className="h-screen w-full bg-background border-l flex flex-col">
-      <div className="flex items-center justify-between p-4 border-b bg-background sticky top-0">
-        <h1 className="text-xl font-bold">Connection Matcher</h1>
+    <div className="h-screen w-full bg-gray-100 dark:bg-black border-l flex flex-col">
+      <div className="flex items-center justify-between p-6 border-b bg-white dark:bg-zinc-900 sticky top-0 shadow-md z-50">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          Connection Matcher
+        </h1>
         <Button variant="ghost" size="icon" onClick={handleClose}>
           <X className="h-4 w-4" />
         </Button>
       </div>
       
-      <Tabs defaultValue="matching" className="flex-1 flex flex-col">
-        <TabsList className="w-full justify-start px-4 pt-4">
-          <TabsTrigger value="matching">Matching</TabsTrigger>
-          <TabsTrigger value="connections">Connections</TabsTrigger>
-          <TabsTrigger value="jobs">Jobs</TabsTrigger>
-        </TabsList>
-        <div className="flex-1 overflow-hidden">
-          <TabsContent value="matching" className="p-4 h-full">
-            <MatchingView />
-          </TabsContent>
-          <TabsContent value="connections" className="p-4 h-full">
-            <ConnectionsView />
-          </TabsContent>
-          <TabsContent value="jobs" className="p-4 h-full">
-            <JobsView />
-          </TabsContent>
+      <div className="flex-1 flex flex-col min-h-0">
+        <div className="p-6 flex-shrink-0 h-[calc(100vh-9rem)] ">
+          <AnimatedTabs 
+            tabs={tabs}
+            containerClassName="justify-center"
+            activeTabClassName=""
+            tabClassName="text-base px-6 py-3 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all rounded-lg"
+          />
         </div>
-      </Tabs>
+        
+        <div className="flex-1 overflow-hidden px-6 pb-6">
+          <div className="h-full">
+            {/* Tab content will render here */}
+          </div>
+        </div>
+      </div>
 
       {session && (
-        <div className="p-4 border-t">
+        <div className="p-6 border-t bg-white dark:bg-zinc-900">
           <Button
             variant="outline"
             size="sm"
             onClick={clearSession}
-            className="w-full"
+            className="w-full max-w-4xl mx-auto"
             disabled={isLoading}
           >
             Clear Session
